@@ -100,6 +100,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND NOT CMAKE_CROSSCOMPILING)
 endif()
 
 add_compile_options(${SIMD_FLAGS})
+target_compile_options(${PROJECT_NAME} PRIVATE ${SIMD_FLAGS})
 message("SIMD: ${SIMD_FLAGS}")
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/../../max-sdk-base/script/max-posttarget.cmake)

@@ -156,7 +156,7 @@ void ext_main(void *r)
 #elif defined(__AVX__)
             post("signalsmith-stretch~ %s  by Alex Bouvier - Based on [signalsmith-stretch] by [Geraint Luff / Signalsmith Audio Ltd]. AVX optimised. MIT License", version);
 #else
-            post("signalsmith-stretch~ %s  by Alex Bouvier - Based on [signalsmith-stretch] by [Geraint Luff / Signalsmith Audio Ltd].", version);
+            post("signalsmith-stretch~ %s  by Alex Bouvier - Based on [signalsmith-stretch] by [Geraint Luff / Signalsmith Audio Ltd]. MIT License", version);
 #endif
 }
 
