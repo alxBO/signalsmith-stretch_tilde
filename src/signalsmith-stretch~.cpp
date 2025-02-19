@@ -306,6 +306,7 @@ void create_stretcher(t_signalsmith *x, long num_channels, long mode){
                         x->stretch->process(extracted_buffer, (int)block_samples, output_ptr, OUTPUT_STRETCH_BUFFER_SIZE);
                         critical_exit(x->critical_stretch);
 
+                        
                         critical_enter(x->critical_synth_buffer);
                         bool buffer_ready = true;
                         for(int c = 0; c < x->buffer_nc; ++c){
@@ -387,8 +388,6 @@ void signalsmith_free(t_signalsmith *x)
     
     critical_free(x->critical_synth_buffer);
     critical_free(x->critical_stretch);
-
-    post("signalsmith-stretch~: freed");
 }
 
 void signalsmith_reset(t_signalsmith*x){
@@ -518,23 +517,20 @@ void signalsmith_perform64(t_signalsmith *x, t_object *dsp64, double **ins, long
     for(int c = 0; c < x->l_chan; ++c)
         output[c] = std::vector<REAL>(sampleframes, 0.0f);
 
+    
     // wait for synth buffer
-    if(x->is_on && !x->synth_buffer_ready && x->has_input_buffer){
+    bool woken = false;
+    while(x->is_on && !x->synth_buffer_ready && x->has_input_buffer && !woken){
 #ifdef __APPLE__
-        // wait for 100ms
-        if (dispatch_semaphore_wait(x->buffer_semaphore, dispatch_time(DISPATCH_TIME_NOW, 50 * NSEC_PER_MSEC)) != 0) {
-            post("signalsmith-stretch~: timeout");
-        }
+        woken = dispatch_semaphore_wait(x->buffer_semaphore, dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC));
 #elif defined(_WIN32)
-        DWORD result = WaitForSingleObject(x->hSemaphore, 50);
-        if( result != WAIT_OBJECT_0){
-            post("signalsmith-stretch~: timeout");
-        }
+        woken = WaitForSingleObject(x->hSemaphore, 100) == WAIT_OBJECT_0;
 #endif
     }
-
+    
     
     critical_enter(x->critical_synth_buffer);
+    bool buffer_ready = true;
     for(int c = 0; c < x->l_chan; ++c)
     {
         if(c < x->synth_buffer.size()){
@@ -542,9 +538,12 @@ void signalsmith_perform64(t_signalsmith *x, t_object *dsp64, double **ins, long
             {
                 std::copy(x->synth_buffer[c].begin(), x->synth_buffer[c].begin() + sampleframes, output[c].data());
                 x->synth_buffer[c].erase(x->synth_buffer[c].begin(), x->synth_buffer[c].begin() + sampleframes);
+                if(x->synth_buffer[c].size() < sampleframes)
+                    buffer_ready = false;
             }
         }
     }
+    x->synth_buffer_ready = buffer_ready;
     critical_exit(x->critical_synth_buffer);
     
     
