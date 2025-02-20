@@ -53,6 +53,7 @@
 #include "ext_buffer.h"
 #include <future>
 #include <shared_mutex>
+#include <deque>
 
 #include "deinterleave.hpp"
 #include "common.h"
@@ -65,32 +66,32 @@ typedef struct _signalsmith {
     long l_chan = 0;
     int sr = 0;
     
-    std::atomic_bool is_on {false};
+    bool is_on {false};
     
     t_buffer_ref *l_buffer_ref = nullptr;
     std::atomic_long buffer_nc {0};
-    std::atomic_bool has_input_buffer {false};
 
     std::unique_ptr<SignalsmithStretch<REAL>> stretch;
     float stretch_factor = 1.0f;
     float pitch = 0.0f;
     
-    std::vector<std::vector<REAL>> synth_buffer;
-    std::atomic_bool synth_buffer_ready{false};
 #ifdef __APPLE__
-    dispatch_semaphore_t buffer_semaphore;
+    dispatch_semaphore_t chunks_semaphore;
+    dispatch_semaphore_t process_semaphore;
 #elif defined(_WIN32)
     HANDLE hSemaphore;
 #endif
     
+    std::deque<std::vector<std::vector<REAL>>> output_chunks;
+    std::atomic_int num_chunks;
+    
     std::atomic_bool running{false};
     std::future<void> task;
-    
+
     long sample_position = 0;
     long blocksize = 0;
     
-    
-    t_critical critical_synth_buffer, critical_stretch;
+    t_critical critical_chunk_buffer, critical_stretch;
     
     void* info_outlet;
 } t_signalsmith;
@@ -106,6 +107,8 @@ void signalsmith_assist(t_signalsmith *x, void *b, long m, long a, char *s);
 void signalsmith_dblclick(t_signalsmith *x);
 void signalsmith_update_buffer_nc(t_signalsmith *x);
 
+void signalsmith_create_stretcher(t_signalsmith *x, long num_channels, long mode);
+void signalsmith_delete_stretcher(t_signalsmith *x);
 t_max_err signalsmith_stretch_factor_set(t_signalsmith *x, t_object *attr, long argc, t_atom *argv);
 t_max_err signalsmith_pitch_set(t_signalsmith *x, t_object *attr, long argc, t_atom *argv);
 t_max_err signalsmith_position_set(t_signalsmith *x, t_object *attr, long argc, t_atom *argv);
@@ -148,7 +151,7 @@ void ext_main(void *r)
     
     signalsmith_class = c;
     
-    const char* version = "v1.0.1";
+    const char* version = "v1.0.2";
 #if defined(__ARM_NEON__)
             post("signalsmith-stretch~ %s by Alex Bouvier - Based on [signalsmith-stretch] by [Geraint Luff / Signalsmith Audio Ltd]. ARM NEON optimised. MIT License", version);
 #elif defined(__AVX2__)
@@ -211,144 +214,62 @@ std::tuple<bool, long> signalsmith_extract_samples(t_signalsmith *x,
         }
         int input_latency = x->stretch->inputLatency();
         
+
+        
         long start = position - input_latency;
         if(start < 0){
             start = 0;
             position = input_latency;
         }
         
-        long end = start + blocksize + input_latency;
-        if (end >= fc) {
+        if(start >= fc){
             return {false, position};
+        }
+        
+        long end = start + blocksize + input_latency;
+        long add_samples = 0;
+        if (end >= fc) {
+            end = fc-1;
+            add_samples = blocksize + input_latency - (end - start);
         }
         
         assert(start>= 0 && start < fc);
         assert(end>= input_latency && end < fc);
         assert(end >= start);
-        assert((end - start) == blocksize + input_latency);
+        assert((end + add_samples - start) == blocksize + input_latency);
         float* tab = buffer_locksamples(buffer);
         if(tab){
             deinterleave(tab + start*x->buffer_nc, output, end-start, x->buffer_nc);
         }
         buffer_unlocksamples(buffer);
 
+        if(add_samples > 0){
+            std::vector<REAL> silence(add_samples);
+            for(auto& channel : output){
+                channel.insert(channel.end(), silence.begin(), silence.end());
+            }
+        }
+            
         return {true, position};
     }
     else
         return {false, position};
 }
 
-
-void delete_stretcher(t_signalsmith *x){
-    if(x->stretch){
-        x->running = false;
-        if(x->task.valid()){
-            x->task.wait();
-        }
-    }
-    x->stretch = nullptr;
-}
-
-void create_stretcher(t_signalsmith *x, long num_channels, long mode){
-    critical_enter(x->critical_stretch);
-    delete_stretcher(x);
-    
-    if(num_channels > 0){
-        x->stretch.reset(new SignalsmithStretch<REAL>());
-        if(x->stretch){
-            if(mode==2){
-                x->stretch->configure((int)num_channels, (float)x->sr*0.12f, (float)x->sr*0.015);
-            }
-            else if (mode ==1){
-                x->stretch->presetCheaper((int)num_channels, (float)x->sr);
-            }
-            else{
-                x->stretch->presetDefault((int)num_channels, (float)x->sr);
-            }
-            x->sample_position = 0;
-            x->task = std::async(std::launch::async, std::bind([](t_signalsmith* x){
-                const long OUTPUT_STRETCH_BUFFER_SIZE = 1<<13;  // fixed output buffer size : 8192 samples
-                const long MIN_BLOCKSIZE = 4;
-                
-                x->running = true;
-
-                std::vector<std::vector<REAL>> extracted_buffer;
-                while(x->running){
-                    
-                    critical_enter(x->critical_stretch);
-                    x->stretch->setTransposeSemitones(x->pitch);
-                    double  stretch_factor = x->stretch_factor;
-                    int input_latency = x->stretch->inputLatency();
-                    long block_samples = MAX(stretch_factor * OUTPUT_STRETCH_BUFFER_SIZE, MIN_BLOCKSIZE);
-                    long synth_buffer_size = x->synth_buffer[0].size();
-                    auto [can_compute, pos] = signalsmith_extract_samples(x, extracted_buffer, x->sample_position, block_samples, MIN_BLOCKSIZE);
-                    critical_exit(x->critical_stretch);
-                    
-                    
-                    /*
-                     can_compute if extraction done and buffer almost empty
-                     update position
-                     update block size
-                     */
-                    can_compute &= (synth_buffer_size < OUTPUT_STRETCH_BUFFER_SIZE);
-                    x->sample_position = pos;
-                    x->blocksize = block_samples + input_latency;
-                    
-                    auto sampleframes = sys_getblksize();
-                    if(can_compute && x->is_on)
-                    {
-                        std::vector<std::vector<REAL>> output_ptr(x->buffer_nc);
-                        for (int i = 0; i < x->buffer_nc; i++) {
-                            output_ptr[i] = std::vector<REAL>(OUTPUT_STRETCH_BUFFER_SIZE);
-                        }
-
-                        critical_enter(x->critical_stretch);
-                        x->stretch->process(extracted_buffer, (int)block_samples, output_ptr, OUTPUT_STRETCH_BUFFER_SIZE);
-                        critical_exit(x->critical_stretch);
-
-                        
-                        critical_enter(x->critical_synth_buffer);
-                        bool buffer_ready = true;
-                        for(int c = 0; c < x->buffer_nc; ++c){
-                            x->synth_buffer[c].insert(x->synth_buffer[c].end(), output_ptr[c].data(), output_ptr[c].data() + OUTPUT_STRETCH_BUFFER_SIZE);
-                            if(x->synth_buffer[c].size() < sampleframes)
-                                buffer_ready = false;
-                        }
-                        x->synth_buffer_ready = buffer_ready;
-                        critical_exit(x->critical_synth_buffer);
-
-#ifdef __APPLE__
-                        dispatch_semaphore_signal(x->buffer_semaphore);
-#elif defined(_WIN32)
-                        ReleaseSemaphore(x->hSemaphore, 1, nullptr);
-#endif
-                        
-                        x->sample_position += block_samples;
-                    }
-                    
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                }
-            }, x));
-        }
-    }
-    else{
-        x->stretch = nullptr;
-    }
-    critical_exit(x->critical_stretch);
-
-}
-
 void *signalsmith_new(t_symbol *s_input_buffer, long chan, long mode)
 {
     t_signalsmith *x = (t_signalsmith*)object_alloc(signalsmith_class);
     dsp_setup((t_pxobject *)x, 1);
-    signalsmith_set_buffer(x, s_input_buffer);
 
 #ifdef __APPLE__
-    x->buffer_semaphore = dispatch_semaphore_create(0);
+            x->chunks_semaphore = dispatch_semaphore_create(0);
+            x->process_semaphore = dispatch_semaphore_create(0);
 #elif defined(_WIN32)
-    x->hSemaphore = CreateSemaphore(nullptr, 0, 1, nullptr);
+            x->hSemaphore = CreateSemaphore(nullptr, 0, 1, nullptr);
 #endif
+    
+    signalsmith_set_buffer(x, s_input_buffer);
+
     x->sr = (int)sys_getsr();
     x->m_mode = (int)mode;
     x->stretch_factor = 1.0f;
@@ -363,10 +284,10 @@ void *signalsmith_new(t_symbol *s_input_buffer, long chan, long mode)
     outlet_new((t_object *)x, "signal");    // for blocksize
     
 
-    critical_new(&x->critical_synth_buffer);
+    critical_new(&x->critical_chunk_buffer);
     critical_new(&x->critical_stretch);
     
-    create_stretcher(x, (int)MIN(x->l_chan, x->buffer_nc.load()), x->m_mode);
+    signalsmith_create_stretcher(x, (int)MIN(x->l_chan, x->buffer_nc.load()), x->m_mode);
     
     return (x);
 }
@@ -374,11 +295,12 @@ void *signalsmith_new(t_symbol *s_input_buffer, long chan, long mode)
 void signalsmith_free(t_signalsmith *x)
 {
     dsp_free((t_pxobject *)x);
-    delete_stretcher(x);
+    signalsmith_delete_stretcher(x);
     
 
 #ifdef __APPLE__
-    dispatch_release(x->buffer_semaphore);
+    dispatch_release(x->chunks_semaphore);
+    dispatch_release(x->process_semaphore);
 #elif defined(_WIN32)
     CloseHandle(x->hSemaphore);
 #endif
@@ -386,8 +308,16 @@ void signalsmith_free(t_signalsmith *x)
 
     object_free(x->l_buffer_ref);
     
-    critical_free(x->critical_synth_buffer);
+    critical_free(x->critical_chunk_buffer);
     critical_free(x->critical_stretch);
+}
+
+
+void signalsmith_flush_chunks(t_signalsmith*x){
+    x->num_chunks = 0;
+    critical_enter(x->critical_chunk_buffer);
+    x->output_chunks.clear();
+    critical_exit(x->critical_chunk_buffer);
 }
 
 void signalsmith_reset(t_signalsmith*x){
@@ -396,11 +326,6 @@ void signalsmith_reset(t_signalsmith*x){
         x->stretch->reset();
     }
     critical_exit(x->critical_stretch);
-    
-    critical_enter(x->critical_synth_buffer);
-    for(auto& buf : x->synth_buffer)
-        buf.clear();
-    critical_exit(x->critical_synth_buffer);
 }
 
 void signalsmith_update_buffer_nc(t_signalsmith *x){
@@ -412,18 +337,10 @@ void signalsmith_update_buffer_nc(t_signalsmith *x){
             error("signalsmith-stretch~ error: cannot read more than %i channels, got %i channels.", MAX_BUFFER_CHANNEL, x->buffer_nc.load());
             
             x->buffer_nc = 0;
-            x->has_input_buffer = false;
-            x->synth_buffer.clear();
-        }
-        else{
-            x->has_input_buffer = x->buffer_nc > 0 ? true : false;
-            x->synth_buffer = std::vector<std::vector<REAL>>(x->buffer_nc);
         }
     }
     else{
         x->buffer_nc = 0;
-        x->has_input_buffer = false;
-        x->synth_buffer.clear();
     }
 }
 
@@ -496,7 +413,7 @@ t_max_err signalsmith_notify(t_signalsmith *x, t_symbol *s, t_symbol *msg, void 
 {
     critical_enter(x->critical_stretch);
     signalsmith_update_buffer_nc(x);
-    create_stretcher(x, (int)MIN(x->l_chan, x->buffer_nc.load()), x->m_mode);
+    signalsmith_create_stretcher(x, (int)MIN(x->l_chan, x->buffer_nc.load()), x->m_mode);
     critical_exit(x->critical_stretch);
         
     return buffer_ref_notify(x->l_buffer_ref, s, msg, sender, data);
@@ -505,66 +422,193 @@ t_max_err signalsmith_notify(t_signalsmith *x, t_symbol *s, t_symbol *msg, void 
 
 // -----------------
 
+void signalsmith_delete_stretcher(t_signalsmith *x){
+    if(x->stretch){
+        x->running = false;
+        if(x->task.valid()){
+            x->task.wait();
+        }
+    }
+    x->stretch = nullptr;
+}
+
+
+void signalsmith_create_stretcher(t_signalsmith *x, long num_channels, long mode){
+    critical_enter(x->critical_stretch);
+    signalsmith_delete_stretcher(x);
+    
+    if(num_channels > 0){
+        x->stretch.reset(new SignalsmithStretch<REAL>());
+        if(x->stretch){
+            if(mode==2){
+                post("signalsmith-stretch~ 8x");
+                x->stretch->configure((int)num_channels, (float)x->sr*0.12f, (float)x->sr*0.015);
+            }
+            else if (mode == 1){
+                post("signalsmith-stretch~ 2.5x");
+                x->stretch->presetCheaper((int)num_channels, (float)x->sr);
+            }
+            else if (mode == 3){
+                post("signalsmith-stretch~ 2x");
+                x->stretch->configure((int)num_channels, (float)x->sr*0.1f*2.0f, (float)x->sr*0.04f*2.0f);
+            }
+            else{
+                post("signalsmith-stretch~ 4x");
+                x->stretch->presetDefault((int)num_channels, (float)x->sr);
+            }
+            x->sample_position = 0;
+            
+            signalsmith_flush_chunks(x);
+            
+            x->task = std::async(std::launch::async, std::bind([](t_signalsmith* x){
+                const long MIN_BLOCKSIZE = 4;
+                
+                x->running = true;
+
+                std::vector<std::vector<REAL>> extracted_buffer;
+                
+                critical_enter(x->critical_stretch);
+                std::vector<std::vector<REAL>> output_ptr(x->buffer_nc);
+                for (int i = 0; i < x->buffer_nc; i++) {
+                    output_ptr[i] = std::vector<REAL>(OUTPUT_STRETCH_BUFFER_SIZE);
+                }
+                critical_exit(x->critical_stretch);
+
+                //launch 1st computation
+                dispatch_semaphore_signal(x->process_semaphore);
+
+                while(x->running){
+                   
+                    bool process = false;
+            #ifdef __APPLE__
+                    process = dispatch_semaphore_wait(x->process_semaphore, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_MSEC)) == 0;
+            #elif defined(_WIN32)
+                    process = WaitForSingleObject(x->hProcessSemaphore, 100) == WAIT_OBJECT_0;
+            #endif
+                    
+                    if(process){
+                        critical_enter(x->critical_stretch);
+                        x->stretch->setTransposeSemitones(x->pitch);
+                        double  stretch_factor = x->stretch_factor;
+                        int input_latency = x->stretch->inputLatency();
+                        long block_samples = MAX((long)(stretch_factor * OUTPUT_STRETCH_BUFFER_SIZE), MIN_BLOCKSIZE);
+                        auto [can_compute, pos] = signalsmith_extract_samples(x, extracted_buffer, x->sample_position, block_samples, MIN_BLOCKSIZE);
+                        critical_exit(x->critical_stretch);
+                        
+                        
+                        /*
+                         can_compute if extraction done and buffer almost empty
+                         update position
+                         update block size
+                         */
+                        x->sample_position = pos;
+                        x->blocksize = block_samples + input_latency;
+                        
+                        auto chunk_size = sys_getblksize();
+                        if(can_compute)
+                        {
+                            critical_enter(x->critical_stretch);
+                            x->stretch->process(extracted_buffer, (int)block_samples, output_ptr, OUTPUT_STRETCH_BUFFER_SIZE);
+                            critical_exit(x->critical_stretch);
+
+                            
+                            assert((OUTPUT_STRETCH_BUFFER_SIZE%chunk_size)==0);
+                            std::vector<std::vector<REAL>> data(x->buffer_nc);
+                            for(int c = 0; c < x->buffer_nc; ++c){
+                                data[c].resize(chunk_size);
+                            }
+                            
+                            for(int i = 0; i < OUTPUT_STRETCH_BUFFER_SIZE/chunk_size; ++i){
+                                for(int c = 0; c < x->buffer_nc; ++c){
+                                    std::copy(output_ptr[c].begin() + (i * chunk_size), output_ptr[c].begin() + (i * chunk_size + chunk_size), data[c].begin());
+                                }
+                                
+                                critical_enter(x->critical_chunk_buffer);
+                                x->output_chunks.push_back(data);
+                                critical_exit(x->critical_chunk_buffer);
+                                
+                                x->num_chunks++;
+                                dispatch_semaphore_signal(x->chunks_semaphore);
+                            }
+                                  
+                            x->sample_position += block_samples;
+                        }
+                        else{
+                            // if cannot extract any more samples, output silence
+                            std::vector<std::vector<REAL>> data(x->buffer_nc);
+                            for(int c = 0; c < x->buffer_nc; ++c){
+                                data[c].resize(chunk_size, 0.0f);
+                            }
+                            
+                            for(int i = 0; i < OUTPUT_STRETCH_BUFFER_SIZE/chunk_size; ++i){
+                                critical_enter(x->critical_chunk_buffer);
+                                x->output_chunks.push_back(data);
+                                critical_exit(x->critical_chunk_buffer);
+                                x->num_chunks++;
+                                dispatch_semaphore_signal(x->chunks_semaphore);
+                            }
+                        }
+                    }
+                    
+                }
+            }, x));
+        }
+    }
+    else{
+        x->stretch = nullptr;
+    }
+    critical_exit(x->critical_stretch);
+
+}
 
 void signalsmith_perform64(t_signalsmith *x, t_object *dsp64, double **ins, long numins, double **outs, long numouts, long sampleframes, long flags, void *userparam)
 {
     t_double    *in = ins[0];
 
     x->is_on = in[0] != 0. ? true : false;
-    bool is_on = x->is_on;
-    
-    std::vector<std::vector<REAL>> output(x->l_chan);
-    for(int c = 0; c < x->l_chan; ++c)
-        output[c] = std::vector<REAL>(sampleframes, 0.0f);
 
-    
-    // wait for synth buffer
+    // wait for chunks
     bool woken = false;
-    while(x->is_on && !x->synth_buffer_ready && x->has_input_buffer && !woken){
+    while(x->is_on && x->buffer_nc > 0 && !woken){
 #ifdef __APPLE__
-        woken = dispatch_semaphore_wait(x->buffer_semaphore, dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC));
+        woken = dispatch_semaphore_wait(x->chunks_semaphore, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_MSEC)) == 0;
 #elif defined(_WIN32)
         woken = WaitForSingleObject(x->hSemaphore, 100) == WAIT_OBJECT_0;
 #endif
     }
     
-    
-    critical_enter(x->critical_synth_buffer);
-    bool buffer_ready = true;
-    for(int c = 0; c < x->l_chan; ++c)
-    {
-        if(c < x->synth_buffer.size()){
-            if(x->synth_buffer[c].size() >= sampleframes)
-            {
-                std::copy(x->synth_buffer[c].begin(), x->synth_buffer[c].begin() + sampleframes, output[c].data());
-                x->synth_buffer[c].erase(x->synth_buffer[c].begin(), x->synth_buffer[c].begin() + sampleframes);
-                if(x->synth_buffer[c].size() < sampleframes)
-                    buffer_ready = false;
+
+    if(x->is_on && x->buffer_nc > 0){
+        if(x->num_chunks.load() > 0){
+            critical_enter(x->critical_chunk_buffer);
+            auto data = x->output_chunks.front();
+            long num_channel = MIN(x->l_chan, x->buffer_nc.load());
+            for(long c = 0; c < num_channel; ++c){
+                for(size_t i = 0; i < sampleframes; ++i)
+                    outs[c][i] = data[c][i];
             }
-        }
-    }
-    x->synth_buffer_ready = buffer_ready;
-    critical_exit(x->critical_synth_buffer);
-    
-    
-    // copy sound
-    if(x->has_input_buffer){
-        for(int c = 0; c < x->l_chan; ++c){
-            for(size_t i = 0; i < sampleframes; ++i)
-                outs[c][i] = output[c][i];
+            
+            x->output_chunks.pop_front();
+            critical_exit(x->critical_chunk_buffer);
+            x->num_chunks--;
         }
     }
     else{
+        //silence
         for(int i = 0; i < x->l_chan; ++i)
             std::fill(&(outs[i][0]), &(outs[i][0]) + sampleframes, 0.0);
     }
 
     
-    // position + blocksize
+    // position + blocksize. always output these parameters
     long pos = x->sample_position;
     long bs = x->blocksize;
     for(size_t i = 0; i < sampleframes; ++i){
         outs[x->l_chan][i] = pos;
         outs[x->l_chan + 1][i] = bs;
     }
+    
+    if(x->num_chunks == (OUTPUT_STRETCH_BUFFER_SIZE/sampleframes)/2) // Signal process when half chunks remains
+        dispatch_semaphore_signal(x->process_semaphore);
+
 }

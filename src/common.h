@@ -27,5 +27,5 @@
 
 typedef float REAL;
 #define MAX_BUFFER_CHANNEL 4
-
+#define OUTPUT_STRETCH_BUFFER_SIZE (1<<13)
 #endif /* common_h */
