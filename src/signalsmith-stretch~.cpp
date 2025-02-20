@@ -384,8 +384,6 @@ void signalsmith_reset(t_signalsmith*x){
 
 void signalsmith_update_buffer(t_signalsmith *x)
 {
-    critical_enter(x->critical_input_buffer);
-    
     // update buffer nc
     t_buffer_obj *buffer = buffer_ref_getobject(x->l_buffer_ref);
     if (buffer) {
@@ -404,8 +402,6 @@ void signalsmith_update_buffer(t_signalsmith *x)
     signalsmith_create_stretcher(x, (int)MIN(x->l_chan, x->buffer_nc.load()), x->mode);
     
     signalsmith_reset(x);
-    
-    critical_exit(x->critical_input_buffer);
 }
 
 t_max_err signalsmith_notify(t_signalsmith *x, t_symbol *s, t_symbol *msg, void *sender, void *data)
@@ -504,7 +500,6 @@ void signalsmith_create_stretcher(t_signalsmith *x, long num_channels, long mode
 
                         if(can_compute)
                         {
-                            // TODO critical section ?
                             x->stretch->process(extracted_buffer, (int)block_samples, output_ptr, OUTPUT_STRETCH_BUFFER_SIZE);
 
                             auto chunk_size = sys_getblksize();
