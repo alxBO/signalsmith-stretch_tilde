@@ -258,7 +258,6 @@ t_max_err signalsmith_stretch_factor_set(t_signalsmith *x, t_object *attr, long 
 t_max_err signalsmith_pitch_set(t_signalsmith *x, t_object *attr, long argc, t_atom *argv){
     float val = atom_getfloat(argv);
     x->pitch = val;
-    signalsmith_reset(x);
     return 0;
 }
 
