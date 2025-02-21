@@ -187,8 +187,8 @@ void *signalsmith_new(t_symbol *s_input_buffer,
             x->chunks_semaphore = dispatch_semaphore_create(0);
             x->process_semaphore = dispatch_semaphore_create(0);
 #elif defined(_WIN32)
-            x->chunks_hSemaphore = CreateSemaphore(nullptr, 0, 1, nullptr);
-            x->process_hSemaphore = CreateSemaphore(nullptr, 0, 1, nullptr);
+            x->chunks_hSemaphore = CreateSemaphore(nullptr, 0, 2048, nullptr);
+            x->process_hSemaphore = CreateSemaphore(nullptr, 0, 128, nullptr);
 #endif
     
 
@@ -365,7 +365,7 @@ void signalsmith_reset(t_signalsmith*x){
         x->chunks_semaphore = dispatch_semaphore_create(0);
 #elif defined(_WIN32)
         CloseHandle(x->chunks_hSemaphore);
-        x->chunks_hSemaphore = CreateSemaphore(nullptr, 0, 1, nullptr);
+        x->chunks_hSemaphore = CreateSemaphore(nullptr, 0, 2048, nullptr);
 #endif
         critical_exit(x->critical_sema_buffer);
             }
