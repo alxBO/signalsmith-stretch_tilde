@@ -431,14 +431,14 @@ void signalsmith_create_stretcher(t_signalsmith *x, long num_channels, long mode
     if(num_channels > 0){
         x->stretch.reset(new SignalsmithStretch<REAL>());
         if(x->stretch){
-            if(mode==2){
-                x->stretch->configure((int)num_channels, (float)x->sr*0.12f, (float)x->sr*0.015);
-            }
-            else if (mode == 1){
+            if(mode==1){
                 x->stretch->presetCheaper((int)num_channels, (float)x->sr);
             }
+            else if (mode == 2){
+                x->stretch->configure((int)num_channels, (float)x->sr*0.6f, (float)x->sr*0.1f);
+            }
             else if (mode == 3){
-                x->stretch->configure((int)num_channels, (float)x->sr*0.1f*2.0f, (float)x->sr*0.04f*2.0f);
+                x->stretch->configure((int)num_channels, (float)x->sr*0.12f, (float)x->sr*0.015);
             }
             else{
                 x->stretch->presetDefault((int)num_channels, (float)x->sr);
