@@ -75,7 +75,7 @@ typedef struct _signalsmith {
     float stretch_factor = 1.0f;
     float pitch = 0.0f;
     long sample_position;
-    long blocksize = 0;
+    long stretch_blocksize = 0;
 
 #ifdef __APPLE__
     dispatch_semaphore_t chunks_semaphore;
@@ -87,7 +87,7 @@ typedef struct _signalsmith {
     
     std::deque<std::vector<std::vector<REAL>>> output_blocks;
     std::atomic_int num_blocks;
-    int block_size;
+    int blocksize;
     
     std::atomic_bool running{false};
     std::future<void> task_stretch;
@@ -193,7 +193,7 @@ void *signalsmith_new(t_symbol *s_input_buffer,
     
 
     x->sr = (int)sys_getsr();
-    x->block_size = sys_getblksize();
+    x->blocksize = sys_getblksize();
     
     x->mode = (int)mode;
     x->stretch_factor = 1.0f;
@@ -464,7 +464,7 @@ void signalsmith_create_stretcher(t_signalsmith *x, long num_channels, long mode
 #elif defined(_WIN32)
                 ReleaseSemaphore(x->process_hSemaphore, 1, nullptr);
 #endif
-                int prev_chunk_size = x->block_size;
+                int prev_chunk_size = x->blocksize;
                 std::vector<std::vector<REAL>> data(x->buffer_nc);
                 for(int c = 0; c < x->buffer_nc; ++c){
                     data[c].resize(prev_chunk_size);
@@ -495,7 +495,7 @@ void signalsmith_create_stretcher(t_signalsmith *x, long num_channels, long mode
                          update block size
                          */
                         x->sample_position = pos;
-                        x->blocksize = block_samples + input_latency;
+                        x->stretch_blocksize = block_samples + input_latency;
                         
 
                         if(can_compute)
@@ -535,25 +535,23 @@ void signalsmith_create_stretcher(t_signalsmith *x, long num_channels, long mode
                         }
                         else{
                             // if cannot extract any more samples, output silence
-                            critical_enter(x->critical_output_blocks);
-                            
-                            //  silence
                             std::vector<std::vector<REAL>> data(x->buffer_nc);
                             for(int c = 0; c < x->buffer_nc; ++c){
-                                data[c].resize(x->block_size);
+                                data[c].resize(x->blocksize);
                                 std::fill(data[c].begin(), data[c].end(), 0.0f);
                             }
                             
                             for(int i = 0; i < OUTPUT_STRETCH_BUFFER_SIZE/x->blocksize; ++i){
+                                critical_enter(x->critical_output_blocks);
                                 x->output_blocks.push_back(data);
                                 x->num_blocks++;
+                                critical_exit(x->critical_output_blocks);
 #ifdef __APPLE__
                                 dispatch_semaphore_signal(x->chunks_semaphore);
 #elif defined(_WIN32)
                                 ReleaseSemaphore(x->chunks_hSemaphore, 1, nullptr);
 #endif                                
                             }
-                            critical_exit(x->critical_output_blocks);
                         }
                         critical_exit(x->critical_input_buffer);
                     }
@@ -572,8 +570,8 @@ void signalsmith_perform64(t_signalsmith *x, t_object *dsp64, double **ins, long
     bool is_on = in[0] != 0. ? true : false;
 
     // reset if blocksize has changed
-    if(sampleframes != x->block_size){
-        x->block_size = (int)sampleframes;
+    if(sampleframes != x->blocksize){
+        x->blocksize = (int)sampleframes;
         signalsmith_reset(x);
     }
 
@@ -583,12 +581,13 @@ void signalsmith_perform64(t_signalsmith *x, t_object *dsp64, double **ins, long
         while(!woken){
             critical_enter(x->critical_sema_buffer);
 #ifdef __APPLE__
-            woken = dispatch_semaphore_wait(x->chunks_semaphore, dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC)) == 0;
+            woken = dispatch_semaphore_wait(x->chunks_semaphore, dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_MSEC)) == 0;
 #elif defined(_WIN32)
             woken = WaitForSingleObject(x->chunks_hSemaphore, 1) == WAIT_OBJECT_0;
 #endif
         critical_exit(x->critical_sema_buffer);
         }
+
         
         if(x->num_blocks > 0){
             // if reset here, check empty after critical section
@@ -615,6 +614,7 @@ void signalsmith_perform64(t_signalsmith *x, t_object *dsp64, double **ins, long
         }
     }
     else{
+
         //silence all channels
         for(long i = 0; i < x->l_chan; ++i)
             std::fill(&(outs[i][0]), &(outs[i][0]) + sampleframes, 0.0);
@@ -623,7 +623,7 @@ void signalsmith_perform64(t_signalsmith *x, t_object *dsp64, double **ins, long
     
     // position + blocksize. always output these parameters
     long pos = x->sample_position;
-    long bs = x->blocksize;
+    long bs = x->stretch_blocksize;
     for(size_t i = 0; i < sampleframes; ++i){
         outs[x->l_chan][i] = pos;
         outs[x->l_chan + 1][i] = bs;
