@@ -81,18 +81,6 @@
 			}
 , 			{
 				"box" : 				{
-					"id" : "obj-42",
-					"linecount" : 3,
-					"maxclass" : "comment",
-					"numinlets" : 1,
-					"numoutlets" : 0,
-					"patching_rect" : [ 477.0, 408.0, 74.0, 47.0 ],
-					"text" : "reset the internal state "
-				}
-
-			}
-, 			{
-				"box" : 				{
 					"id" : "obj-41",
 					"linecount" : 5,
 					"maxclass" : "comment",
@@ -134,7 +122,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 617.0, 461.0, 110.0, 22.0 ],
+					"patching_rect" : [ 567.0, 459.0, 110.0, 22.0 ],
 					"text" : "get_output_latency"
 				}
 
@@ -146,7 +134,7 @@
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 544.0, 566.0, 150.0, 60.0 ],
+					"patching_rect" : [ 544.0, 566.0, 133.0, 60.0 ],
 					"text" : "Arguments:\nbuffer name: symbol\noutput channels: int\nmode: (default 0)"
 				}
 
@@ -272,7 +260,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 482.0, 459.0, 35.0, 22.0 ],
+					"patching_rect" : [ 478.0, 459.0, 35.0, 22.0 ],
 					"text" : "reset"
 				}
 
@@ -422,7 +410,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 602.0, 427.0, 103.0, 22.0 ],
+					"patching_rect" : [ 552.0, 425.0, 103.0, 22.0 ],
 					"text" : "get_input_latency"
 				}
 
@@ -552,7 +540,7 @@
 , 			{
 				"patchline" : 				{
 					"destination" : [ "obj-1", 0 ],
-					"midpoints" : [ 626.5, 553.67578125, 137.5, 553.67578125 ],
+					"midpoints" : [ 576.5, 553.67578125, 137.5, 553.67578125 ],
 					"source" : [ "obj-37", 0 ]
 				}
 
@@ -582,7 +570,7 @@
 , 			{
 				"patchline" : 				{
 					"destination" : [ "obj-1", 0 ],
-					"midpoints" : [ 611.5, 554.0, 137.5, 554.0 ],
+					"midpoints" : [ 561.5, 554.0, 137.5, 554.0 ],
 					"source" : [ "obj-46", 0 ]
 				}
 
@@ -598,7 +586,7 @@
 , 			{
 				"patchline" : 				{
 					"destination" : [ "obj-1", 0 ],
-					"midpoints" : [ 491.5, 552.20703125, 137.5, 552.20703125 ],
+					"midpoints" : [ 487.5, 552.20703125, 137.5, 552.20703125 ],
 					"source" : [ "obj-7", 0 ]
 				}
 
@@ -611,7 +599,7 @@
 
 			}
  ],
-		"originid" : "pat-10",
+		"originid" : "pat-14",
 		"dependency_cache" : [ 			{
 				"name" : "signalsmith-stretch~.mxo",
 				"type" : "iLaX"
