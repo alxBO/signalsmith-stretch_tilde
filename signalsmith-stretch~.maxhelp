@@ -14,6 +14,19 @@
 		"gridsize" : [ 15.0, 15.0 ],
 		"boxes" : [ 			{
 				"box" : 				{
+					"attr" : "mode",
+					"id" : "obj-6",
+					"maxclass" : "attrui",
+					"numinlets" : 1,
+					"numoutlets" : 1,
+					"outlettype" : [ "" ],
+					"parameter_enable" : 0,
+					"patching_rect" : [ 77.0, 382.0, 251.0, 22.0 ]
+				}
+
+			}
+, 			{
+				"box" : 				{
 					"fontface" : 0,
 					"fontname" : "Arial",
 					"fontsize" : 12.0,
@@ -35,8 +48,7 @@
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 325.0, 628.0, 93.0, 33.0 ],
-					"presentation_linecount" : 2,
+					"patching_rect" : [ 325.0, 628.0, 94.0, 33.0 ],
 					"text" : "current position in samples"
 				}
 
@@ -49,7 +61,6 @@
 					"numinlets" : 1,
 					"numoutlets" : 0,
 					"patching_rect" : [ 421.0, 628.0, 107.0, 33.0 ],
-					"presentation_linecount" : 2,
 					"text" : "internal blocksize in samples"
 				}
 
@@ -75,7 +86,7 @@
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 544.0, 459.0, 74.0, 47.0 ],
+					"patching_rect" : [ 477.0, 408.0, 74.0, 47.0 ],
 					"text" : "reset the internal state "
 				}
 
@@ -83,13 +94,12 @@
 , 			{
 				"box" : 				{
 					"id" : "obj-41",
-					"linecount" : 4,
+					"linecount" : 5,
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 40.0, 604.0, 150.0, 60.0 ],
-					"presentation_linecount" : 4,
-					"text" : "Modes: \n0: overlap 4x\n1: overlap 2.5x\n2: overlap 8x"
+					"patching_rect" : [ 28.0, 566.0, 87.0, 74.0 ],
+					"text" : "Modes: \n0: overlap 4x\n1: overlap 2.5x\n2: overlap 6x\n3: overlap 8x"
 				}
 
 			}
@@ -124,8 +134,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 469.0, 392.0, 110.0, 22.0 ],
-					"presentation_linecount" : 2,
+					"patching_rect" : [ 617.0, 461.0, 110.0, 22.0 ],
 					"text" : "get_output_latency"
 				}
 
@@ -152,7 +161,6 @@
 					"numinlets" : 1,
 					"numoutlets" : 0,
 					"patching_rect" : [ 179.0, 219.0, 125.0, 25.0 ],
-					"presentation_linecount" : 3,
 					"text" : "load a soundfile"
 				}
 
@@ -165,8 +173,7 @@
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ -4.0, 63.0, 410.0, 60.0 ],
-					"presentation_linecount" : 3,
+					"patching_rect" : [ -4.0, 63.0, 413.0, 60.0 ],
 					"text" : "Based in Signalsmith Stretch: C++ pitch/time library developped by [Geraint Luff / Signalsmith Audio Ltd] \n\nMIT License. by Alex Bouvier"
 				}
 
@@ -192,7 +199,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 93.0, 375.0, 251.0, 22.0 ]
+					"patching_rect" : [ 60.0, 347.0, 251.0, 22.0 ]
 				}
 
 			}
@@ -205,7 +212,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 77.0, 334.0, 251.0, 22.0 ]
+					"patching_rect" : [ 44.0, 306.0, 251.0, 22.0 ]
 				}
 
 			}
@@ -265,7 +272,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 503.0, 459.0, 35.0, 22.0 ],
+					"patching_rect" : [ 482.0, 459.0, 35.0, 22.0 ],
 					"text" : "reset"
 				}
 
@@ -391,7 +398,7 @@
 					"numoutlets" : 5,
 					"outlettype" : [ "signal", "signal", "signal", "signal", "" ],
 					"patching_rect" : [ 128.0, 566.0, 414.0, 22.0 ],
-					"text" : "signalsmith-stretch~ input_buffer 2 0"
+					"text" : "signalsmith-stretch~ input_buffer 2"
 				}
 
 			}
@@ -404,7 +411,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 61.0, 295.0, 251.0, 22.0 ]
+					"patching_rect" : [ 28.0, 267.0, 251.0, 22.0 ]
 				}
 
 			}
@@ -415,7 +422,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 454.0, 358.0, 103.0, 22.0 ],
+					"patching_rect" : [ 602.0, 427.0, 103.0, 22.0 ],
 					"text" : "get_input_latency"
 				}
 
@@ -477,7 +484,7 @@
 , 			{
 				"patchline" : 				{
 					"destination" : [ "obj-1", 0 ],
-					"midpoints" : [ 70.5, 554.0, 137.5, 554.0 ],
+					"midpoints" : [ 37.5, 554.0, 137.5, 554.0 ],
 					"source" : [ "obj-12", 0 ]
 				}
 
@@ -514,7 +521,7 @@
 , 			{
 				"patchline" : 				{
 					"destination" : [ "obj-1", 0 ],
-					"midpoints" : [ 102.5, 553.828125, 137.5, 553.828125 ],
+					"midpoints" : [ 69.5, 553.828125, 137.5, 553.828125 ],
 					"source" : [ "obj-17", 0 ]
 				}
 
@@ -522,7 +529,7 @@
 , 			{
 				"patchline" : 				{
 					"destination" : [ "obj-1", 0 ],
-					"midpoints" : [ 86.5, 553.17578125, 137.5, 553.17578125 ],
+					"midpoints" : [ 53.5, 553.17578125, 137.5, 553.17578125 ],
 					"source" : [ "obj-2", 0 ]
 				}
 
@@ -545,7 +552,7 @@
 , 			{
 				"patchline" : 				{
 					"destination" : [ "obj-1", 0 ],
-					"midpoints" : [ 478.5, 553.67578125, 137.5, 553.67578125 ],
+					"midpoints" : [ 626.5, 553.67578125, 137.5, 553.67578125 ],
 					"source" : [ "obj-37", 0 ]
 				}
 
@@ -575,7 +582,7 @@
 , 			{
 				"patchline" : 				{
 					"destination" : [ "obj-1", 0 ],
-					"midpoints" : [ 463.5, 554.0, 137.5, 554.0 ],
+					"midpoints" : [ 611.5, 554.0, 137.5, 554.0 ],
 					"source" : [ "obj-46", 0 ]
 				}
 
@@ -583,7 +590,15 @@
 , 			{
 				"patchline" : 				{
 					"destination" : [ "obj-1", 0 ],
-					"midpoints" : [ 512.5, 552.20703125, 137.5, 552.20703125 ],
+					"midpoints" : [ 86.5, 553.875, 137.5, 553.875 ],
+					"source" : [ "obj-6", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-1", 0 ],
+					"midpoints" : [ 491.5, 552.20703125, 137.5, 552.20703125 ],
 					"source" : [ "obj-7", 0 ]
 				}
 
@@ -596,7 +611,7 @@
 
 			}
  ],
-		"originid" : "pat-8",
+		"originid" : "pat-10",
 		"dependency_cache" : [ 			{
 				"name" : "signalsmith-stretch~.mxo",
 				"type" : "iLaX"

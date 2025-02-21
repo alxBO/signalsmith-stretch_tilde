@@ -435,7 +435,7 @@ void signalsmith_create_stretcher(t_signalsmith *x, long num_channels, long mode
                 x->stretch->presetCheaper((int)num_channels, (float)x->sr);
             }
             else if (mode == 2){
-                x->stretch->configure((int)num_channels, (float)x->sr*0.6f, (float)x->sr*0.1f);
+                x->stretch->configure((int)num_channels, (float)x->sr*0.12f, (float)x->sr*0.02f);
             }
             else if (mode == 3){
                 x->stretch->configure((int)num_channels, (float)x->sr*0.12f, (float)x->sr*0.015);
