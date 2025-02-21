@@ -589,10 +589,11 @@ void signalsmith_perform64(t_signalsmith *x, t_object *dsp64, double **ins, long
 
         
         if(x->num_blocks > 0){
-            // if reset here, check empty after critical section
+            // if call to reset method here, check empty after critical section
             critical_enter(x->critical_output_blocks);
             auto data = x->output_blocks.empty() ? std::vector<std::vector<REAL>>(): x->output_blocks.front();
-            x->output_blocks.pop_front();
+            if(!x->output_blocks.empty())
+                x->output_blocks.pop_front();
             critical_exit(x->critical_output_blocks);
             
             for(long c = 0; c < data.size(); ++c){
