@@ -9,7 +9,3 @@ set(CMAKE_CXX_COMPILER /opt/homebrew/bin/x86_64-w64-mingw32-g++)
 set(CMAKE_RC_COMPILER /opt/homebrew/bin/x86_64-w64-mingw32-windres)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx2")
-
-# Set the linker flags
-set(CMAKE_EXE_LINKER_FLAGS "-static-libgcc -static-libstdc++")
-
