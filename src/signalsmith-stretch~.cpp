@@ -164,7 +164,7 @@ void ext_main(void *r)
     
     signalsmith_class = c;
     
-    const char* version = "v1.0.2";
+    const char* version = "v0.0.1-pre";
 #if defined(__ARM_NEON__)
             post("signalsmith-stretch~ %s by Alex Bouvier - Based on [signalsmith-stretch] by [Geraint Luff / Signalsmith Audio Ltd]. ARM NEON optimised. MIT License", version);
 #elif defined(__AVX2__)
