@@ -86,8 +86,10 @@ typedef struct _signalsmith {
 #endif
     
     std::deque<std::vector<std::vector<REAL>>> output_blocks;
+    std::deque<long> output_positions;
     std::atomic_int num_blocks;
     int blocksize;
+    long last_position;
     
     std::atomic_bool running{false};
     std::future<void> task_stretch;
@@ -199,6 +201,8 @@ void *signalsmith_new(t_symbol *s_input_buffer,
     x->stretch_factor = 1.0f;
     x->pitch = 0.0f;
     x->sample_position = 0;
+    x->last_position = -1;
+    
     
     x->l_chan = chan > 0 ? MIN(MAX(chan, 1), MAX_BUFFER_CHANNEL) : 1;  // num channels: [1,MAX_BUFFER_CHANNEL]
     
@@ -354,6 +358,8 @@ void signalsmith_reset(t_signalsmith*x){
         critical_enter(x->critical_output_blocks);
         x->num_blocks = 0;
         x->output_blocks.clear();
+        x->output_positions.clear();
+        x->last_position = -1;
         critical_exit(x->critical_output_blocks);
 
         bool trial = true;
@@ -514,22 +520,24 @@ void signalsmith_create_stretcher(t_signalsmith *x, long num_channels, long mode
                                     data[c].resize(prev_chunk_size);
                                 }
                             }
-                            
+                            critical_exit(x->critical_output_blocks);
+
                             for(int i = 0; i < OUTPUT_STRETCH_BUFFER_SIZE/chunk_size; ++i){
+                                critical_enter(x->critical_output_blocks);
                                 for(int c = 0; c < x->buffer_nc; ++c){
                                     std::copy(output_ptr[c].begin() + (i * chunk_size), output_ptr[c].begin() + (i * chunk_size + chunk_size), data[c].begin());
                                 }
-                                
                                 x->output_blocks.push_back(data);
+                                x->output_positions.push_back(pos + i * block_samples / (OUTPUT_STRETCH_BUFFER_SIZE/chunk_size));// input_latency ?
+                                critical_exit(x->critical_output_blocks);
                                 x->num_blocks++;
+
 #ifdef __APPLE__
                                 dispatch_semaphore_signal(x->chunks_semaphore);
 #elif defined(_WIN32)
                                 ReleaseSemaphore(x->chunks_hSemaphore, 1, nullptr);
 #endif
                             }
-                            critical_exit(x->critical_output_blocks);
-
                             x->sample_position += block_samples;
                         }
                         else{
@@ -573,7 +581,7 @@ void signalsmith_perform64(t_signalsmith *x, t_object *dsp64, double **ins, long
         x->blocksize = (int)sampleframes;
         signalsmith_reset(x);
     }
-
+    
     if(is_on && x->buffer_nc > 0){
         // wait for chunks
         bool woken = false;
@@ -587,7 +595,6 @@ void signalsmith_perform64(t_signalsmith *x, t_object *dsp64, double **ins, long
         critical_exit(x->critical_sema_buffer);
         }
 
-        
         if(x->num_blocks > 0){
             // if call to reset method here, check empty after critical section
             critical_enter(x->critical_output_blocks);
@@ -619,15 +626,28 @@ void signalsmith_perform64(t_signalsmith *x, t_object *dsp64, double **ins, long
         for(long i = 0; i < x->l_chan; ++i)
             std::fill(&(outs[i][0]), &(outs[i][0]) + sampleframes, 0.0);
     }
-
     
+    
+    // pop current position
+    long current_pos = 0;
+    critical_enter(x->critical_output_blocks);
+    if(!x->output_positions.empty()){
+        current_pos =  x->output_positions.front();
+        x->last_position = current_pos;
+        x->output_positions.pop_front();
+    }
+    else{
+        current_pos = x->last_position;
+    }
+    critical_exit(x->critical_output_blocks);
+
     // position + blocksize. always output these parameters
-    long pos = x->sample_position;
     long bs = x->stretch_blocksize;
     for(size_t i = 0; i < sampleframes; ++i){
-        outs[x->l_chan][i] = pos;
+        outs[x->l_chan][i] = current_pos;
         outs[x->l_chan + 1][i] = bs;
     }
+
     
     // Signal process when half chunks remains
     if(x->num_blocks == (OUTPUT_STRETCH_BUFFER_SIZE/sampleframes)/2){
